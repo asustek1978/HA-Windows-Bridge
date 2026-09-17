@@ -18,7 +18,7 @@ internal sealed class HomeAssistantClient : IDisposable
     {
         Exception? last = null;
         foreach (var (url, network) in new[]
-            { (_config.LocalUrl, "LAN"), (_config.ExternalUrl, "Remote") })
+            { (_config.LocalUrl, "Локальный адрес"), (_config.ExternalUrl, "Внешний адрес") })
         {
             if (string.IsNullOrEmpty(url)) continue;
             try
@@ -34,7 +34,7 @@ internal sealed class HomeAssistantClient : IDisposable
                 last = ex;
             }
         }
-        throw new IOException("Home Assistant is unavailable at the configured addresses.", last);
+        throw new IOException("Home Assistant недоступен по заданным адресам.", last);
     }
 
     private HttpRequestMessage Authenticated(HttpMethod method, string url, object? payload = null)
@@ -47,17 +47,41 @@ internal sealed class HomeAssistantClient : IDisposable
 
     public async Task EnsureRegistrationAsync(string url, CancellationToken ct)
     {
-        if (!string.IsNullOrEmpty(_config.WebhookId)) return;
+        if (!string.IsNullOrEmpty(_config.WebhookId))
+        {
+            if (_config.UiLocale != "ru")
+            {
+                // Existing registrations keep their entity IDs. Home Assistant
+                // updates original_name when register_sensor is called again.
+                using var update = await PostWebhookAsync(url, new
+                {
+                    type = "update_registration",
+                    data = new
+                    {
+                        app_version = "1.0.1",
+                        device_name = "Компьютер Windows " + Environment.MachineName,
+                        manufacturer = "Компьютер Windows",
+                        model = Environment.MachineName,
+                        os_version = Environment.OSVersion.VersionString,
+                        app_data = new { push_websocket_channel = true }
+                    }
+                }, ct);
+                _config.RegisteredSensors.Clear();
+                _config.UiLocale = "ru";
+                _config.Save();
+            }
+            return;
+        }
 
         using var request = Authenticated(HttpMethod.Post, url + "/api/mobile_app/registrations",
             new
             {
                 device_id = _config.DeviceId,
                 app_id = "ha.windows.bridge",
-                app_name = "HA Windows Bridge",
-                app_version = "1.0.0",
-                device_name = "Windows " + Environment.MachineName,
-                manufacturer = "Windows PC",
+                app_name = "Мост Windows для Home Assistant",
+                app_version = "1.0.1",
+                device_name = "Компьютер Windows " + Environment.MachineName,
+                manufacturer = "Компьютер Windows",
                 model = Environment.MachineName,
                 os_name = "Windows",
                 os_version = Environment.OSVersion.VersionString,
@@ -69,7 +93,7 @@ internal sealed class HomeAssistantClient : IDisposable
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
         string? webhook = json.RootElement.GetProperty("webhook_id").GetString();
         if (string.IsNullOrEmpty(webhook))
-            throw new InvalidDataException("Home Assistant returned no webhook ID.");
+            throw new InvalidDataException("Home Assistant не вернул идентификатор webhook.");
         _config.SetWebhook(webhook);
     }
 
@@ -116,7 +140,7 @@ internal sealed class HomeAssistantClient : IDisposable
                 changed |= _config.RegisteredSensors.Remove(metric.Id);
                 continue;
             }
-            throw new InvalidDataException("Home Assistant rejected sensor " + metric.Id + ": " + code);
+            throw new InvalidDataException("Home Assistant отклонил датчик " + metric.Id + ": " + code);
         }
         if (changed) _config.Save();
     }
@@ -129,7 +153,7 @@ internal sealed class HomeAssistantClient : IDisposable
         if (response.StatusCode == HttpStatusCode.Gone)
         {
             _config.ResetRegistration();
-            throw new IOException("The HA mobile_app device was removed. Registering again.");
+            throw new IOException("Устройство mobile_app удалено из HA. Повторная регистрация.");
         }
         response.EnsureSuccessStatusCode();
         // The caller receives an independent copy and must dispose it.
@@ -152,13 +176,13 @@ internal sealed class HomeAssistantClient : IDisposable
         using (var hello = JsonDocument.Parse(await ReceiveAsync(socket, ct)))
         {
             if (hello.RootElement.GetProperty("type").GetString() != "auth_required")
-                throw new IOException("Unexpected Home Assistant WebSocket greeting.");
+                throw new IOException("Неожиданный ответ WebSocket от Home Assistant.");
         }
         await SendAsync(socket, new { type = "auth", access_token = _config.Token }, ct);
         using (var auth = JsonDocument.Parse(await ReceiveAsync(socket, ct)))
         {
             if (auth.RootElement.GetProperty("type").GetString() != "auth_ok")
-                throw new UnauthorizedAccessException("Home Assistant rejected the access token.");
+                throw new UnauthorizedAccessException("Home Assistant отклонил токен доступа.");
         }
 
         await SendAsync(socket, new
@@ -170,7 +194,7 @@ internal sealed class HomeAssistantClient : IDisposable
         {
             if (subscription.RootElement.GetProperty("type").GetString() != "result"
                 || !subscription.RootElement.GetProperty("success").GetBoolean())
-                throw new IOException("Home Assistant rejected the notification subscription.");
+                throw new IOException("Home Assistant отклонил подписку на уведомления.");
         }
 
         connected();
@@ -203,10 +227,10 @@ internal sealed class HomeAssistantClient : IDisposable
         {
             received = await socket.ReceiveAsync(new ArraySegment<byte>(chunk), ct);
             if (received.MessageType == WebSocketMessageType.Close)
-                throw new IOException("Home Assistant closed the WebSocket connection.");
+                throw new IOException("Home Assistant закрыл соединение WebSocket.");
             if (received.MessageType != WebSocketMessageType.Text
                 || buffer.Length + received.Count > 256 * 1024)
-                throw new InvalidDataException("Unexpected or oversized WebSocket message.");
+                throw new InvalidDataException("Неожиданное или слишком большое сообщение WebSocket.");
             buffer.Write(chunk, 0, received.Count);
         } while (!received.EndOfMessage);
         return Encoding.UTF8.GetString(buffer.ToArray());

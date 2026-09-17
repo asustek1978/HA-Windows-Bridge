@@ -1,62 +1,65 @@
-# HA Windows Bridge v1.0
+# HA Windows Bridge v1.0.1
 
-A Windows 11 x64 tray client for Home Assistant. It registers the PC through the built-in mobile_app integration, sends diagnostic sensors, and receives Home Assistant notifications over an outbound WebSocket. There are no incoming Windows ports or custom Home Assistant integrations.
+Клиент для Windows 11 x64: передаёт данные компьютера в Home Assistant и показывает уведомления в Windows. Работает в трее через штатную интеграцию mobile_app. Отдельная интеграция для HA, MQTT и входящие порты на компьютере не требуются.
 
-## Install
+## Установка
 
-Download the HAWindowsBridge_v1.0_win-x64 artifact from the latest successful [Windows build](https://github.com/asustek1978/HA-Windows-Bridge/actions/workflows/windows-build.yml), extract HAWindowsBridge.exe to a permanent folder, and launch it. The self-contained build includes the .NET runtime; Windows may show an unknown publisher warning because this build is not signed.
+1. Откройте [сборки для Windows](https://github.com/asustek1978/HA-Windows-Bridge/actions/workflows/windows-build.yml) и выберите последнюю успешную сборку ветки feature/windows-client-v1.
+2. Скачайте артефакт HAWindowsBridge_v1.0.1_win-x64, распакуйте HAWindowsBridge.exe в постоянную папку и запустите.
+3. Откройте «Настройки...» через значок программы в трее.
+4. Укажите хотя бы один адрес Home Assistant и долгосрочный токен доступа из профиля HA → «Безопасность».
+5. Нажмите «Сохранить и подключить».
 
-Open the tray icon's Settings. Enter:
+Пример локального адреса: http://192.168.1.100:8123. Пример внешнего: https://ha.polyarca.ru. Оба адреса должны вести к одному и тому же Home Assistant. Если локальный адрес недоступен, программа использует внешний. Для внешнего адреса обязателен HTTPS; сертификат проверяется обычными средствами Windows. При использовании локального HTTP токен передаётся внутри сети без шифрования: указывайте такой адрес только для доверенной домашней сети или пользуйтесь HTTPS/VPN.
 
-- Local URL: for example, http://192.168.1.100:8123 (optional; only used on your home network).
-- External URL: for example, https://ha.polyarca.ru (optional if the local URL is set). An external URL must use HTTPS.
-- A Home Assistant long-lived access token from your profile under Security.
-- Update interval (30 seconds by default) and optional Windows login autostart.
+Интервал передачи по умолчанию — 30 секунд, в настройках доступно 15–300 секунд. Там же включается запуск программы при входе в Windows. Если включён автозапуск, не перемещайте EXE без повторного сохранения настройки.
 
-At least one URL and the token are required. Click Save; the status in the tray shows LAN or Remote. The same Home Assistant instance must be reachable through both URLs. On a different network the external URL is used. HTTPS certificates are verified by Windows. For a local HTTP URL, the access token travels unencrypted on your LAN; prefer HTTPS or a trusted VPN if available.
+EXE уже содержит среду .NET. Программа пока не подписана цифровой подписью, поэтому Windows может показать предупреждение о неизвестном издателе. Токен и идентификатор webhook хранятся в папке %LOCALAPPDATA%\HAWindowsBridge в зашифрованном виде через Windows DPAPI для текущей учётной записи.
 
-The token and mobile_app webhook ID are encrypted with Windows DPAPI for the current user and stored under %LOCALAPPDATA%\HAWindowsBridge. Keep the EXE at its installed path if autostart is enabled. Do not share the settings file or token.
+## Датчики в Home Assistant
 
-## Sensors
+Устройство появится в «Настройки → Устройства и службы → Мобильное приложение». Точные entity_id зависят от имени компьютера и уже существующих сущностей — посмотрите их на странице устройства.
 
-The device appears under Settings → Devices & services → Mobile App. The actual entity IDs depend on your PC name and any existing HA entities. Check the device page instead of assuming fixed IDs.
+| Датчик | Значение |
+| --- | --- |
+| Загрузка процессора | Процент загрузки CPU |
+| Загрузка памяти | Процент занятой оперативной памяти |
+| Время бездействия | Минуты с последнего ввода |
+| Время работы | Часы после загрузки Windows |
+| IP-адрес | Адрес выбранного сетевого адаптера |
+| Скорость загрузки / Скорость отдачи | Трафик адаптера в Мбит/с |
+| Последний отчёт | Время последней передачи данных |
+| Заряд аккумулятора | Только если в устройстве есть аккумулятор |
+| Сеанс заблокирован | После первого события блокировки/разблокировки во время работы клиента |
+| Экран включён | После первого события питания дисплея во время работы клиента |
 
-| Sensor | Unit | Notes |
-| --- | --- | --- |
-| CPU usage | % | Whole system |
-| RAM usage | % | Physical memory |
-| Idle time | min | Time since keyboard/mouse input |
-| Uptime | h | Time since Windows boot |
-| IP address | text | First active network adapter with a gateway |
-| Download speed / Upload speed | Mbit/s | Selected adapter |
-| Last seen | timestamp | Updated each reporting cycle |
-| Battery level | % | Only for PCs with a battery |
-| Session locked | on/off | Appears after the first lock or unlock event while the client is running |
-| Display on | on/off | Appears after the first Windows display power event |
+При выключенном компьютере HA хранит последнее состояние датчиков. Для проверки доступности используйте время датчика «Последний отчёт»: отдельный постоянный датчик online после отключения ПК показывал бы неверное значение.
 
-When the client or PC goes offline, HA retains the last reading. Use the Last seen timestamp to detect a stale device; an always-on online boolean would incorrectly remain on.
+Если вы уже запускали английскую сборку, при первом подключении v1.0.1 программа обновит исходные названия устройства и датчиков через mobile_app. Их уникальные идентификаторы и текущие entity_id сохранятся. Имена, которые вы меняли вручную в HA, сохраняют пользовательские настройки.
 
-## Notifications
+## Проверка уведомлений
 
-The registration enables a notify action for this PC. Find the exact notify.mobile_app_... action name in HA Developer tools → Actions and send:
+После регистрации устройства найдите действие notify.mobile_app_… в «Инструменты разработчика → Действия». Для проверки отправьте сообщение на найденное действие, заменив его имя в примере:
 
     action: notify.mobile_app_your_pc
     data:
       title: Home Assistant
-      message: Test from HA
+      message: Проверка уведомления на компьютере
 
-The tray client must be running and connected. This first version shows Windows tray notifications with a title and message. Windows Focus/Do Not Disturb settings may suppress the banner. Images, replacement tags, action buttons, and PC control are planned for subsequent versions; they are not implemented here. If the notify action does not appear immediately, restart Home Assistant once.
+Программа должна работать и показывать в трее состояние «Локальный адрес — подключено» или «Внешний адрес — подключено». Если действие notify появилось не сразу, один раз перезапустите Home Assistant. Режим «Не беспокоить» в Windows может скрывать баннеры.
 
-## Build locally
+Сейчас уведомление поддерживает заголовок и текст. Изображения, кнопки действий, замена сообщения по тегу и управление компьютером из HA пока не реализованы.
 
-Install .NET 10 SDK on Windows 11 x64 and run:
+## Сборка из исходников
+
+Установите .NET 10 SDK на Windows 11 x64. В корне репозитория выполните:
 
     dotnet publish src/HaWindowsBridge/HaWindowsBridge.csproj -c Release -r win-x64 --self-contained true -o dist
 
-The executable is dist/HAWindowsBridge.exe. The GitHub Actions workflow uses the same command and attaches the EXE as a build artifact. No installer, code signing, or release has been published yet.
+Результат: dist/HAWindowsBridge.exe. GitHub Actions выполняет такую же сборку и прикладывает исполняемый файл как артефакт. Инсталлятор и релиз пока не опубликованы.
 
-## Protocol
+## Как устроено подключение
 
-Registration: authenticated POST /api/mobile_app/registrations. Sensors: register_sensor once per entity, then update_sensor_states in batches via the mobile_app webhook. Notifications: authenticated /api/websocket with mobile_app/push_notification_channel. Encryption of the webhook payload is not requested: HTTPS/WSS is required for the external address; the local HTTP option is explicitly under your control. No received notification content is executed as a command.
+Клиент регистрирует устройство через POST /api/mobile_app/registrations, создаёт датчики вызовами register_sensor и обновляет их пакетами update_sensor_states через webhook. Уведомления получает через /api/websocket и mobile_app/push_notification_channel. Данные из уведомления не исполняются как команды. Для внешнего адреса используется HTTPS/WSS.
 
-Based on the published Home Assistant native app API documentation; source code is original and does not include code from HASSConnect.
+Код проекта написан отдельно и не копирует исходники HASSConnect. Служебные имена методов, JSON-ключи, unique_id и название исполняемого файла оставлены латиницей для совместимости с Home Assistant и сохранения уже созданных сущностей.

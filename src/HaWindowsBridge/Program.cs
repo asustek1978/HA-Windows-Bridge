@@ -13,7 +13,7 @@ internal static class Program
         using var singleInstance = new Mutex(true, @"Local\HAWindowsBridge", out bool first);
         if (!first)
         {
-            MessageBox.Show("HA Windows Bridge is already running.", "HA Windows Bridge");
+            MessageBox.Show("Программа уже запущена.", "Мост Windows для Home Assistant");
             return;
         }
         try
@@ -23,7 +23,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            MessageBox.Show(ex.Message, "HA Windows Bridge could not start",
+            MessageBox.Show(ex.Message, "Не удалось запустить мост Windows",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
@@ -54,16 +54,16 @@ internal sealed class BridgeContext : ApplicationContext
         SystemEvents.SessionSwitch += SessionChanged;
 
         var menu = new ContextMenuStrip();
-        _statusItem = new ToolStripMenuItem("Starting...") { Enabled = false };
+        _statusItem = new ToolStripMenuItem("Запуск...") { Enabled = false };
         menu.Items.Add(_statusItem);
-        menu.Items.Add("Settings...", null, (_, _) => OpenSettings());
-        menu.Items.Add("Open Home Assistant", null, (_, _) => OpenHomeAssistant());
+        menu.Items.Add("Настройки...", null, (_, _) => OpenSettings());
+        menu.Items.Add("Открыть Home Assistant", null, (_, _) => OpenHomeAssistant());
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Quit", null, (_, _) => Quit());
+        menu.Items.Add("Выход", null, (_, _) => Quit());
 
         _tray = new NotifyIcon
         {
-            Icon = SystemIcons.Application, Text = "HA Windows Bridge",
+            Icon = SystemIcons.Application, Text = "Мост Windows для Home Assistant",
             ContextMenuStrip = menu, Visible = true
         };
         _tray.DoubleClick += (_, _) => OpenSettings();
@@ -86,7 +86,7 @@ internal sealed class BridgeContext : ApplicationContext
             {
                 if (!_config.IsConfigured)
                 {
-                    SetStatus("Open Settings to connect");
+                    SetStatus("Откройте настройки для подключения");
                 }
                 else
                 {
@@ -94,14 +94,14 @@ internal sealed class BridgeContext : ApplicationContext
                     await _client.EnsureRegistrationAsync(url, _stop.Token);
                     await _client.SendSensorsAsync(url, _metrics.Sample(), _stop.Token);
                     StartNotifications(url);
-                    SetStatus(network + (_pushConnected ? " connected" : " (push reconnecting)"));
+                    SetStatus(network + (_pushConnected ? " — подключено" : " — уведомления переподключаются"));
                 }
             }
             catch (OperationCanceledException) when (_stop.IsCancellationRequested) { break; }
             catch (Exception ex)
             {
                 StopNotifications();
-                SetStatus("Disconnected: " + ex.Message);
+                SetStatus("Нет связи: " + ex.Message);
             }
 
             try
@@ -128,7 +128,7 @@ internal sealed class BridgeContext : ApplicationContext
                     cancellation);
             }
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
-            catch (Exception ex) { SetStatus("Push disconnected: " + ex.Message); }
+            catch (Exception ex) { SetStatus("Нет связи с уведомлениями: " + ex.Message); }
             finally { _pushConnected = false; }
         }, cancellation);
     }
@@ -157,8 +157,8 @@ internal sealed class BridgeContext : ApplicationContext
     {
         string label = status.Length > 110 ? status[..110] : status;
         _statusItem.Text = label;
-        _tray.Text = ("HA Windows Bridge: " + status)[..Math.Min(63,
-            ("HA Windows Bridge: " + status).Length)];
+        _tray.Text = ("Мост Windows: " + status)[..Math.Min(63,
+            ("Мост Windows: " + status).Length)];
         if (_settings is { IsDisposed: false }) _settings.SetStatus(label);
     });
 
@@ -219,17 +219,17 @@ internal sealed class SettingsForm : Form
     private readonly TextBox _external = new() { Dock = DockStyle.Fill };
     private readonly TextBox _token = new()
         { Dock = DockStyle.Fill, UseSystemPasswordChar = true,
-          PlaceholderText = "Leave blank to keep the existing token" };
+          PlaceholderText = "Оставьте пустым, чтобы сохранить токен" };
     private readonly NumericUpDown _interval = new()
         { Minimum = 15, Maximum = 300, Dock = DockStyle.Left, Width = 90 };
-    private readonly CheckBox _autostart = new() { Text = "Start with Windows", AutoSize = true };
-    private readonly Label _status = new() { AutoSize = true, Text = "Not connected" };
+    private readonly CheckBox _autostart = new() { Text = "Запускать вместе с Windows", AutoSize = true };
+    private readonly Label _status = new() { AutoSize = true, Text = "Нет подключения" };
 
     public SettingsForm(BridgeConfig config, Action saved)
     {
         _config = config;
         _saved = saved;
-        Text = "HA Windows Bridge — Settings";
+        Text = "Мост Windows для Home Assistant — настройки";
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(560, 320);
         Size = new Size(660, 350);
@@ -245,18 +245,18 @@ internal sealed class SettingsForm : Form
             Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 7,
             Padding = new Padding(14), AutoSize = false
         };
-        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         for (int i = 0; i < 7; i++)
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, i == 6 ? 50 : 37));
 
-        AddRow(grid, 0, "Local HA URL", _local);
-        AddRow(grid, 1, "External HA URL", _external);
-        AddRow(grid, 2, "Access token", _token);
-        AddRow(grid, 3, "Report every (s)", _interval);
+        AddRow(grid, 0, "Локальный адрес HA", _local);
+        AddRow(grid, 1, "Внешний адрес HA", _external);
+        AddRow(grid, 2, "Токен доступа", _token);
+        AddRow(grid, 3, "Отчёт каждые (с)", _interval);
         grid.Controls.Add(_autostart, 1, 4);
         grid.Controls.Add(_status, 1, 5);
-        var save = new Button { Text = "Save and connect", Width = 140, Height = 32 };
+        var save = new Button { Text = "Сохранить и подключить", Width = 195, Height = 32 };
         save.Click += (_, _) => SaveSettings();
         grid.Controls.Add(save, 1, 6);
         Controls.Add(grid);
@@ -281,9 +281,9 @@ internal sealed class SettingsForm : Form
             string local = BridgeConfig.NormalizeUrl(_local.Text, false);
             string external = BridgeConfig.NormalizeUrl(_external.Text, true);
             if (local.Length == 0 && external.Length == 0)
-                throw new ArgumentException("Enter at least one Home Assistant URL.");
+                throw new ArgumentException("Укажите хотя бы один адрес Home Assistant.");
             if (_token.Text.Length == 0 && _config.TokenCipher.Length == 0)
-                throw new ArgumentException("Enter a long-lived access token.");
+                throw new ArgumentException("Укажите долгосрочный токен доступа.");
 
             _config.LocalUrl = local;
             _config.ExternalUrl = external;
@@ -300,7 +300,7 @@ internal sealed class SettingsForm : Form
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Settings could not be saved",
+            MessageBox.Show(this, ex.Message, "Не удалось сохранить настройки",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }

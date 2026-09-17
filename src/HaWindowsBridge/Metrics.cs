@@ -27,7 +27,7 @@ internal sealed class Metrics
             if (_lastTotal != 0 && nowTotal > _lastTotal)
             {
                 double cpu = 100.0 * (1.0 - (double)(nowIdle - _lastIdle) / (nowTotal - _lastTotal));
-                result.Add(new("cpu", "CPU usage", "sensor", Math.Round(Math.Clamp(cpu, 0, 100), 1),
+                result.Add(new("cpu", "Загрузка процессора", "sensor", Math.Round(Math.Clamp(cpu, 0, 100), 1),
                     "mdi:chip", "%", null, "measurement"));
             }
             _lastIdle = nowIdle;
@@ -38,7 +38,7 @@ internal sealed class Metrics
         if (GlobalMemoryStatusEx(ref memory) && memory.TotalPhys > 0)
         {
             double percent = 100.0 * (1.0 - (double)memory.AvailPhys / memory.TotalPhys);
-            result.Add(new("ram", "RAM usage", "sensor", Math.Round(percent, 1),
+            result.Add(new("ram", "Загрузка памяти", "sensor", Math.Round(percent, 1),
                 "mdi:memory", "%", null, "measurement"));
         }
 
@@ -46,14 +46,14 @@ internal sealed class Metrics
         if (GetLastInputInfo(ref input))
         {
             uint elapsedMs = unchecked((uint)Environment.TickCount - input.Tick);
-            result.Add(new("idle", "Idle time", "sensor", Math.Round(elapsedMs / 60000.0, 1),
+            result.Add(new("idle", "Время бездействия", "sensor", Math.Round(elapsedMs / 60000.0, 1),
                 "mdi:timer-outline", "min", null, "measurement"));
         }
 
-        result.Add(new("uptime", "Uptime", "sensor",
+        result.Add(new("uptime", "Время работы", "sensor",
             Math.Round(Environment.TickCount64 / 3600000.0, 1), "mdi:clock-outline",
             "h", null, "measurement"));
-        result.Add(new("last_seen", "Last seen", "sensor",
+        result.Add(new("last_seen", "Последний отчёт", "sensor",
             DateTimeOffset.UtcNow.ToString("O"), "mdi:clock-check-outline", null, "timestamp"));
 
         try
@@ -71,17 +71,17 @@ internal sealed class Metrics
             {
                 string address = adapter.GetIPProperties().UnicastAddresses.First(a =>
                     a.Address.AddressFamily == AddressFamily.InterNetwork).Address.ToString();
-                result.Add(new("ip", "IP address", "sensor", address, "mdi:ip-network"));
+                result.Add(new("ip", "IP-адрес", "sensor", address, "mdi:ip-network"));
                 var stats = adapter.GetIPv4Statistics();
                 var now = DateTimeOffset.UtcNow;
                 double seconds = (now - _lastNetworkAt).TotalSeconds;
                 if (_lastAdapter == adapter.Id && seconds > 0 && seconds < 600
                     && stats.BytesReceived >= _lastRx && stats.BytesSent >= _lastTx)
                 {
-                    result.Add(new("download", "Download speed", "sensor",
+                    result.Add(new("download", "Скорость загрузки", "sensor",
                         Math.Round((stats.BytesReceived - _lastRx) * 8.0 / seconds / 1000000.0, 2),
                         "mdi:download-network", "Mbit/s", null, "measurement"));
-                    result.Add(new("upload", "Upload speed", "sensor",
+                    result.Add(new("upload", "Скорость отдачи", "sensor",
                         Math.Round((stats.BytesSent - _lastTx) * 8.0 / seconds / 1000000.0, 2),
                         "mdi:upload-network", "Mbit/s", null, "measurement"));
                 }
@@ -98,16 +98,16 @@ internal sealed class Metrics
         if (!power.BatteryChargeStatus.HasFlag(BatteryChargeStatus.NoSystemBattery)
             && power.BatteryLifePercent is >= 0 and <= 1)
         {
-            result.Add(new("battery", "Battery level", "sensor",
+            result.Add(new("battery", "Заряд аккумулятора", "sensor",
                 Math.Round(power.BatteryLifePercent * 100.0, 0),
                 "mdi:battery", "%", "battery", "measurement"));
         }
 
         if (SessionLocked.HasValue)
-            result.Add(new("locked", "Session locked", "binary_sensor",
+            result.Add(new("locked", "Сеанс заблокирован", "binary_sensor",
                 SessionLocked.Value, "mdi:lock-outline"));
         if (DisplayOn.HasValue)
-            result.Add(new("display", "Display on", "binary_sensor",
+            result.Add(new("display", "Экран включён", "binary_sensor",
                 DisplayOn.Value, "mdi:monitor"));
 
         return result;

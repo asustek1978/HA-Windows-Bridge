@@ -18,6 +18,7 @@ internal sealed class BridgeConfig
     public string DeviceId { get; set; } = Guid.NewGuid().ToString("N");
     public string TokenCipher { get; set; } = "";
     public string WebhookCipher { get; set; } = "";
+    public string UiLocale { get; set; } = "";
     public HashSet<string> RegisteredSensors { get; set; } = [];
 
     [System.Text.Json.Serialization.JsonIgnore]
@@ -32,7 +33,7 @@ internal sealed class BridgeConfig
     {
         if (!File.Exists(FilePath)) return new BridgeConfig();
         var config = JsonSerializer.Deserialize<BridgeConfig>(File.ReadAllText(FilePath))
-            ?? throw new InvalidDataException("Settings file is empty.");
+            ?? throw new InvalidDataException("Файл настроек пуст.");
         config.RegisteredSensors ??= [];
         if (string.IsNullOrWhiteSpace(config.DeviceId)) config.DeviceId = Guid.NewGuid().ToString("N");
         return config;
@@ -40,7 +41,7 @@ internal sealed class BridgeConfig
 
     public void SetToken(string token)
     {
-        if (string.IsNullOrWhiteSpace(token)) throw new ArgumentException("Token cannot be empty.");
+        if (string.IsNullOrWhiteSpace(token)) throw new ArgumentException("Токен не может быть пустым.");
         TokenCipher = Protect(token.Trim());
         WebhookCipher = "";
         RegisteredSensors.Clear();
@@ -49,6 +50,7 @@ internal sealed class BridgeConfig
     public void SetWebhook(string webhook)
     {
         WebhookCipher = Protect(webhook);
+        UiLocale = "ru";
         RegisteredSensors.Clear();
         Save();
     }
@@ -85,11 +87,11 @@ internal sealed class BridgeConfig
             || (uri.Scheme != "http" && uri.Scheme != "https")
             || uri.UserInfo.Length != 0 || uri.AbsolutePath != "/"
             || uri.Query.Length != 0 || uri.Fragment.Length != 0)
-            throw new ArgumentException("Enter a complete HTTP(S) URL without a path or credentials.");
+            throw new ArgumentException("Укажите полный адрес HTTP(S) без пути и данных для входа.");
         if (external && uri.Scheme != "https")
-            throw new ArgumentException("The external URL must use HTTPS.");
+            throw new ArgumentException("Внешний адрес должен использовать HTTPS.");
         if (uri.Scheme == "http" && !IsPrivateAddress(uri.Host))
-            throw new ArgumentException("HTTP is only allowed for private local addresses.");
+            throw new ArgumentException("HTTP разрешён только для частных локальных адресов.");
         return uri.GetLeftPart(UriPartial.Authority).TrimEnd('/');
     }
 
