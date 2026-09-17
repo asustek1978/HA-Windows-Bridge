@@ -19,6 +19,6 @@ jobs:
         run: dotnet publish src/HaWindowsBridge/HaWindowsBridge.csproj -c Release -r win-x64 --self-contained true -o dist
       - uses: actions/upload-artifact@v4
         with:
-          name: HAWindowsBridge_v1.0.1_win-x64
+          name: HAWindowsBridge_v1.0.2_win-x64
           path: dist/HAWindowsBridge.exe
           if-no-files-found: error

@@ -11,7 +11,8 @@
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <DebugType>embedded</DebugType>
     <AssemblyName>HAWindowsBridge</AssemblyName>
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
+    <ApplicationIcon>Assets/ha_windows_bridge_v1.0.2.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />

@@ -51,8 +51,8 @@ internal sealed class Metrics
         }
 
         result.Add(new("uptime", "Время работы", "sensor",
-            Math.Round(Environment.TickCount64 / 3600000.0, 1), "mdi:clock-outline",
-            "h", null, "measurement"));
+            Environment.TickCount64 / 60000L, "mdi:clock-outline",
+            "min", "duration", "measurement"));
         result.Add(new("last_seen", "Последний отчёт", "sensor",
             DateTimeOffset.UtcNow.ToString("O"), "mdi:clock-check-outline", null, "timestamp"));
 

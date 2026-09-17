@@ -20,6 +20,7 @@ internal sealed class BridgeConfig
     public string WebhookCipher { get; set; } = "";
     public string UiLocale { get; set; } = "";
     public HashSet<string> RegisteredSensors { get; set; } = [];
+    public int SensorSchemaVersion { get; set; }
 
     [System.Text.Json.Serialization.JsonIgnore]
     public string Token => Unprotect(TokenCipher);

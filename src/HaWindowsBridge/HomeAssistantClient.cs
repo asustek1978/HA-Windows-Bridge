@@ -58,7 +58,7 @@ internal sealed class HomeAssistantClient : IDisposable
                     type = "update_registration",
                     data = new
                     {
-                        app_version = "1.0.1",
+                        app_version = "1.0.2",
                         device_name = "Компьютер Windows " + Environment.MachineName,
                         manufacturer = "Компьютер Windows",
                         model = Environment.MachineName,
@@ -79,7 +79,7 @@ internal sealed class HomeAssistantClient : IDisposable
                 device_id = _config.DeviceId,
                 app_id = "ha.windows.bridge",
                 app_name = "Мост Windows для Home Assistant",
-                app_version = "1.0.1",
+                app_version = "1.0.2",
                 device_name = "Компьютер Windows " + Environment.MachineName,
                 manufacturer = "Компьютер Windows",
                 model = Environment.MachineName,
@@ -100,6 +100,13 @@ internal sealed class HomeAssistantClient : IDisposable
     public async Task SendSensorsAsync(string url, IReadOnlyList<Metric> metrics, CancellationToken ct)
     {
         if (metrics.Count == 0) return;
+        if (_config.SensorSchemaVersion < 2)
+        {
+            // Повторная регистрация меняет единицу с часов на минуты для существующего датчика.
+            _config.RegisteredSensors.Remove("uptime");
+            _config.SensorSchemaVersion = 2;
+            _config.Save();
+        }
         foreach (var metric in metrics)
         {
             if (_config.RegisteredSensors.Contains(metric.Id)) continue;

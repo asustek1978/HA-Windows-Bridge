@@ -29,6 +29,17 @@ internal static class Program
     }
 }
 
+internal static class BridgeIcon
+{
+    public static Icon Value { get; } = Load();
+
+    private static Icon Load()
+    {
+        try { return Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application; }
+        catch (Exception) { return SystemIcons.Application; }
+    }
+}
+
 internal sealed class BridgeContext : ApplicationContext
 {
     private readonly BridgeConfig _config = BridgeConfig.Load();
@@ -63,7 +74,7 @@ internal sealed class BridgeContext : ApplicationContext
 
         _tray = new NotifyIcon
         {
-            Icon = SystemIcons.Application, Text = "Мост Windows для Home Assistant",
+            Icon = BridgeIcon.Value, Text = "Мост Windows для Home Assistant",
             ContextMenuStrip = menu, Visible = true
         };
         _tray.DoubleClick += (_, _) => OpenSettings();
@@ -230,6 +241,7 @@ internal sealed class SettingsForm : Form
         _config = config;
         _saved = saved;
         Text = "Мост Windows для Home Assistant — настройки";
+        Icon = BridgeIcon.Value;
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(560, 320);
         Size = new Size(660, 350);
