@@ -206,7 +206,7 @@ internal sealed class BridgeContext : ApplicationContext
             StopNotifications();
             _config.Save();
         });
-        _settings.SetStatus(_statusItem.Text);
+        _settings.SetStatus(_statusItem.Text ?? "");
         _settings.Show();
         _settings.Activate();
     }

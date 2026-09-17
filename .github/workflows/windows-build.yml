@@ -15,6 +15,8 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - name: Проверить защиту команд
+        run: dotnet run --project tests/BridgeSecurityChecks/BridgeSecurityChecks.csproj -c Release
       - name: Собрать автономный EXE
         run: dotnet publish src/HaWindowsBridge/HaWindowsBridge.csproj -c Release -r win-x64 --self-contained true -o dist
       - uses: actions/upload-artifact@v4
