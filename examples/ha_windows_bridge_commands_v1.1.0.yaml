@@ -1,0 +1,68 @@
+# Скопируйте файл в /config/includes/packages/ и замените действие notify ниже.
+# В /config/secrets.yaml укажите ha_windows_bridge_control_key из окна клиента Windows.
+script:
+  ha_windows_bridge_lock:
+    alias: "Заблокировать Windows"
+    icon: mdi:lock
+    mode: single
+    sequence:
+      - action: notify.mobile_app_ZAMENITE_NA_SVOE_DEISTVIE
+        data:
+          message: HA_WINDOWS_BRIDGE_COMMAND
+          data:
+            ha_windows_bridge:
+              action: lock
+              key: !secret ha_windows_bridge_control_key
+              issued_at: "{{ as_timestamp(now()) | int }}"
+  ha_windows_bridge_sleep:
+    alias: "Отправить Windows в сон"
+    icon: mdi:sleep
+    mode: single
+    sequence:
+      - action: notify.mobile_app_ZAMENITE_NA_SVOE_DEISTVIE
+        data:
+          message: HA_WINDOWS_BRIDGE_COMMAND
+          data:
+            ha_windows_bridge:
+              action: sleep
+              key: !secret ha_windows_bridge_control_key
+              issued_at: "{{ as_timestamp(now()) | int }}"
+  ha_windows_bridge_restart:
+    alias: "Перезагрузить Windows через 60 секунд"
+    icon: mdi:restart
+    mode: single
+    sequence:
+      - action: notify.mobile_app_ZAMENITE_NA_SVOE_DEISTVIE
+        data:
+          message: HA_WINDOWS_BRIDGE_COMMAND
+          data:
+            ha_windows_bridge:
+              action: restart
+              key: !secret ha_windows_bridge_control_key
+              issued_at: "{{ as_timestamp(now()) | int }}"
+  ha_windows_bridge_shutdown:
+    alias: "Выключить Windows через 60 секунд"
+    icon: mdi:power
+    mode: single
+    sequence:
+      - action: notify.mobile_app_ZAMENITE_NA_SVOE_DEISTVIE
+        data:
+          message: HA_WINDOWS_BRIDGE_COMMAND
+          data:
+            ha_windows_bridge:
+              action: shutdown
+              key: !secret ha_windows_bridge_control_key
+              issued_at: "{{ as_timestamp(now()) | int }}"
+  ha_windows_bridge_cancel_shutdown:
+    alias: "Отменить выключение Windows"
+    icon: mdi:cancel
+    mode: single
+    sequence:
+      - action: notify.mobile_app_ZAMENITE_NA_SVOE_DEISTVIE
+        data:
+          message: HA_WINDOWS_BRIDGE_COMMAND
+          data:
+            ha_windows_bridge:
+              action: cancel_shutdown
+              key: !secret ha_windows_bridge_control_key
+              issued_at: "{{ as_timestamp(now()) | int }}"

@@ -49,16 +49,15 @@ internal sealed class HomeAssistantClient : IDisposable
     {
         if (!string.IsNullOrEmpty(_config.WebhookId))
         {
-            if (_config.UiLocale != "ru")
+            if (_config.UiLocale != "ru" || _config.AppVersion != "1.1.0")
             {
-                // Existing registrations keep their entity IDs. Home Assistant
-                // updates original_name when register_sensor is called again.
+                bool relocalize = _config.UiLocale != "ru";
                 using var update = await PostWebhookAsync(url, new
                 {
                     type = "update_registration",
                     data = new
                     {
-                        app_version = "1.0.2",
+                        app_version = "1.1.0",
                         device_name = "Компьютер Windows " + Environment.MachineName,
                         manufacturer = "Компьютер Windows",
                         model = Environment.MachineName,
@@ -66,8 +65,9 @@ internal sealed class HomeAssistantClient : IDisposable
                         app_data = new { push_websocket_channel = true }
                     }
                 }, ct);
-                _config.RegisteredSensors.Clear();
+                if (relocalize) _config.RegisteredSensors.Clear();
                 _config.UiLocale = "ru";
+                _config.AppVersion = "1.1.0";
                 _config.Save();
             }
             return;
@@ -79,7 +79,7 @@ internal sealed class HomeAssistantClient : IDisposable
                 device_id = _config.DeviceId,
                 app_id = "ha.windows.bridge",
                 app_name = "Мост Windows для Home Assistant",
-                app_version = "1.0.2",
+                app_version = "1.1.0",
                 device_name = "Компьютер Windows " + Environment.MachineName,
                 manufacturer = "Компьютер Windows",
                 model = Environment.MachineName,
@@ -170,7 +170,8 @@ internal sealed class HomeAssistantClient : IDisposable
         };
     }
 
-    public async Task ListenAsync(string url, Action connected, Action<string, string> notify, CancellationToken ct)
+    public async Task ListenAsync(string url, Action connected, Action<string, string> notify,
+        Action<string> command, CancellationToken ct)
     {
         var uri = new Uri(url);
         var builder = new UriBuilder(uri)
@@ -215,6 +216,11 @@ internal sealed class HomeAssistantClient : IDisposable
                 ? t.GetString() ?? "Home Assistant" : "Home Assistant";
             string message = payload.TryGetProperty("message", out var m)
                 ? m.GetString() ?? "" : "";
+            if (message == "HA_WINDOWS_BRIDGE_COMMAND")
+            {
+                if (WindowsCommands.TryParse(payload, _config, out string action)) command(action);
+                continue;
+            }
             if (message.Length > 0) notify(title, message);
         }
     }

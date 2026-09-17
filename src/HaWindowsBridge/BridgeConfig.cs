@@ -15,17 +15,23 @@ internal sealed class BridgeConfig
     public string LocalUrl { get; set; } = "";
     public string ExternalUrl { get; set; } = "";
     public int IntervalSeconds { get; set; } = 30;
+    public string VpnTestHost { get; set; } = "";
     public string DeviceId { get; set; } = Guid.NewGuid().ToString("N");
     public string TokenCipher { get; set; } = "";
     public string WebhookCipher { get; set; } = "";
     public string UiLocale { get; set; } = "";
+    public string AppVersion { get; set; } = "";
     public HashSet<string> RegisteredSensors { get; set; } = [];
     public int SensorSchemaVersion { get; set; }
+    public bool AllowRemoteControl { get; set; }
+    public string CommandKeyCipher { get; set; } = "";
 
     [System.Text.Json.Serialization.JsonIgnore]
     public string Token => Unprotect(TokenCipher);
     [System.Text.Json.Serialization.JsonIgnore]
     public string WebhookId => Unprotect(WebhookCipher);
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string CommandKey => Unprotect(CommandKeyCipher);
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsConfigured => !string.IsNullOrWhiteSpace(TokenCipher)
         && (!string.IsNullOrWhiteSpace(LocalUrl) || !string.IsNullOrWhiteSpace(ExternalUrl));
@@ -40,6 +46,16 @@ internal sealed class BridgeConfig
         return config;
     }
 
+    public string EnsureCommandKey()
+    {
+        if (string.IsNullOrEmpty(CommandKeyCipher))
+        {
+            CommandKeyCipher = Protect(Convert.ToHexString(RandomNumberGenerator.GetBytes(24)).ToLowerInvariant());
+            Save();
+        }
+        return CommandKey;
+    }
+
     public void SetToken(string token)
     {
         if (string.IsNullOrWhiteSpace(token)) throw new ArgumentException("Токен не может быть пустым.");
@@ -52,6 +68,7 @@ internal sealed class BridgeConfig
     {
         WebhookCipher = Protect(webhook);
         UiLocale = "ru";
+        AppVersion = "1.1.0";
         RegisteredSensors.Clear();
         Save();
     }

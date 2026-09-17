@@ -103,7 +103,13 @@ internal sealed class BridgeContext : ApplicationContext
                 {
                     var (url, network) = await _client.FindServerAsync(_stop.Token);
                     await _client.EnsureRegistrationAsync(url, _stop.Token);
-                    await _client.SendSensorsAsync(url, _metrics.Sample(), _stop.Token);
+                    var readings = _metrics.Sample(_config.VpnTestHost);
+                    readings.Add(new("remote_control", "Управление Windows из HA", "binary_sensor",
+                        _config.AllowRemoteControl, "mdi:remote"));
+                    if (_metrics.LastCommand.Length > 0)
+                        readings.Add(new("last_command", "Последняя команда Windows", "sensor",
+                            _metrics.LastCommand, "mdi:history"));
+                    await _client.SendSensorsAsync(url, readings, _stop.Token);
                     StartNotifications(url);
                     SetStatus(network + (_pushConnected ? " — подключено" : " — уведомления переподключаются"));
                 }
@@ -136,7 +142,7 @@ internal sealed class BridgeContext : ApplicationContext
             try
             {
                 await _client.ListenAsync(url, () => _pushConnected = true, ShowNotification,
-                    cancellation);
+                    ExecuteRemoteCommand, cancellation);
             }
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
             catch (Exception ex) { SetStatus("Нет связи с уведомлениями: " + ex.Message); }
@@ -152,6 +158,14 @@ internal sealed class BridgeContext : ApplicationContext
         _pushTask = null;
         _pushConnected = false;
         _pushUrl = "";
+    }
+
+    private void ExecuteRemoteCommand(string action)
+    {
+        if (!_config.AllowRemoteControl) return;
+        string status = WindowsCommands.Execute(action);
+        _metrics.LastCommand = status;
+        SetStatus("Команда HA: " + status);
     }
 
     private void ShowNotification(string title, string message)
@@ -213,6 +227,8 @@ internal sealed class BridgeContext : ApplicationContext
         StopNotifications();
         SystemEvents.SessionSwitch -= SessionChanged;
         _displayWindow.Dispose();
+        _metrics.Dispose();
+        _client.Dispose();
         _settings?.Close();
         _tray.Visible = false;
         _tray.Dispose();
@@ -231,9 +247,15 @@ internal sealed class SettingsForm : Form
     private readonly TextBox _token = new()
         { Dock = DockStyle.Fill, UseSystemPasswordChar = true,
           PlaceholderText = "Оставьте пустым, чтобы сохранить токен" };
+    private readonly TextBox _vpnTestHost = new()
+        { Dock = DockStyle.Fill, PlaceholderText = "Например, 10.77.78.1 (необязательно)" };
     private readonly NumericUpDown _interval = new()
         { Minimum = 15, Maximum = 300, Dock = DockStyle.Left, Width = 90 };
     private readonly CheckBox _autostart = new() { Text = "Запускать вместе с Windows", AutoSize = true };
+    private readonly CheckBox _remote = new() { Text = "Разрешить команды из Home Assistant", AutoSize = true };
+    private readonly TextBox _commandKey = new()
+        { Dock = DockStyle.Fill, ReadOnly = true, UseSystemPasswordChar = true };
+    private readonly Button _copyKey = new() { Text = "Копировать ключ", AutoSize = true };
     private readonly Label _status = new() { AutoSize = true, Text = "Нет подключения" };
 
     public SettingsForm(BridgeConfig config, Action saved)
@@ -243,34 +265,55 @@ internal sealed class SettingsForm : Form
         Text = "Мост Windows для Home Assistant — настройки";
         Icon = BridgeIcon.Value;
         StartPosition = FormStartPosition.CenterScreen;
-        MinimumSize = new Size(560, 320);
-        Size = new Size(660, 350);
+        MinimumSize = new Size(560, 430);
+        Size = new Size(660, 470);
 
         _local.Text = config.LocalUrl;
         _external.Text = config.ExternalUrl;
         _interval.Value = Math.Clamp(config.IntervalSeconds, 15, 300);
+        _vpnTestHost.Text = config.VpnTestHost;
+        _remote.Checked = config.AllowRemoteControl;
+        _commandKey.Text = config.CommandKey;
+        _copyKey.Enabled = config.AllowRemoteControl;
+        _remote.CheckedChanged += (_, _) =>
+        {
+            if (_remote.Checked) _commandKey.Text = _config.EnsureCommandKey();
+            _copyKey.Enabled = _remote.Checked;
+        };
+        _copyKey.Click += (_, _) =>
+        {
+            if (_commandKey.Text.Length > 0) Clipboard.SetText(_commandKey.Text);
+        };
         using (var key = Registry.CurrentUser.OpenSubKey(RunKey))
             _autostart.Checked = key?.GetValue("HAWindowsBridge") is not null;
 
         var grid = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 7,
+            Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 10,
             Padding = new Padding(14), AutoSize = false
         };
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (int i = 0; i < 7; i++)
-            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, i == 6 ? 50 : 37));
+        for (int i = 0; i < 10; i++)
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, i == 9 ? 50 : 37));
 
         AddRow(grid, 0, "Локальный адрес HA", _local);
         AddRow(grid, 1, "Внешний адрес HA", _external);
         AddRow(grid, 2, "Токен доступа", _token);
         AddRow(grid, 3, "Отчёт каждые (с)", _interval);
-        grid.Controls.Add(_autostart, 1, 4);
-        grid.Controls.Add(_status, 1, 5);
+        AddRow(grid, 4, "Проверять VPN-узел", _vpnTestHost);
+        grid.Controls.Add(_autostart, 1, 5);
+        grid.Controls.Add(_remote, 1, 6);
+        var keyRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
+        keyRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        keyRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        keyRow.Controls.Add(_commandKey, 0, 0);
+        keyRow.Controls.Add(_copyKey, 1, 0);
+        AddRow(grid, 7, "Ключ команд HA", keyRow);
+        grid.Controls.Add(_status, 1, 8);
         var save = new Button { Text = "Сохранить и подключить", Width = 195, Height = 32 };
         save.Click += (_, _) => SaveSettings();
-        grid.Controls.Add(save, 1, 6);
+        grid.Controls.Add(save, 1, 9);
         Controls.Add(grid);
         AcceptButton = save;
     }
@@ -299,7 +342,14 @@ internal sealed class SettingsForm : Form
 
             _config.LocalUrl = local;
             _config.ExternalUrl = external;
+            string vpnHost = _vpnTestHost.Text.Trim();
+            if (vpnHost.Length > 0 && (!System.Net.IPAddress.TryParse(vpnHost, out var vpnAddress)
+                || vpnAddress.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork))
+                throw new ArgumentException("Для проверки VPN укажите IPv4-адрес узла.");
+            _config.VpnTestHost = vpnHost;
             _config.IntervalSeconds = (int)_interval.Value;
+            _config.AllowRemoteControl = _remote.Checked;
+            if (_remote.Checked) _config.EnsureCommandKey();
             if (_token.Text.Length > 0) _config.SetToken(_token.Text);
             _saved();
 

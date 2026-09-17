@@ -8,8 +8,9 @@ namespace HAWindowsBridge;
 internal sealed record Metric(string Id, string Name, string Type, object State,
     string Icon, string? Unit = null, string? DeviceClass = null, string? StateClass = null);
 
-internal sealed class Metrics
+internal sealed class Metrics : IDisposable
 {
+    private readonly HardwareMetrics _hardware = new();
     private ulong _lastIdle, _lastTotal;
     private long _lastRx, _lastTx;
     private DateTimeOffset _lastNetworkAt;
@@ -17,8 +18,9 @@ internal sealed class Metrics
 
     public bool? SessionLocked { get; set; }
     public bool? DisplayOn { get; set; }
+    public string LastCommand { get; set; } = "";
 
-    public List<Metric> Sample()
+    public List<Metric> Sample(string vpnTestHost = "")
     {
         var result = new List<Metric>();
         if (GetSystemTimes(out var idle, out var kernel, out var user))
@@ -40,6 +42,12 @@ internal sealed class Metrics
             double percent = 100.0 * (1.0 - (double)memory.AvailPhys / memory.TotalPhys);
             result.Add(new("ram", "Загрузка памяти", "sensor", Math.Round(percent, 1),
                 "mdi:memory", "%", null, "measurement"));
+            result.Add(new("ram_total", "Всего памяти", "sensor",
+                Math.Round(memory.TotalPhys / 1073741824.0, 2),
+                "mdi:memory", "GiB", "data_size", "measurement"));
+            result.Add(new("ram_available", "Свободная память", "sensor",
+                Math.Round(memory.AvailPhys / 1073741824.0, 2),
+                "mdi:memory", "GiB", "data_size", "measurement"));
         }
 
         var input = new LastInputInfo { Size = (uint)Marshal.SizeOf<LastInputInfo>() };
@@ -94,7 +102,38 @@ internal sealed class Metrics
         catch (NetworkInformationException) { /* Interfaces can disappear during a reconnect. */ }
         catch (InvalidOperationException) { /* Interface changed during sampling. */ }
 
+        foreach (var drive in DriveInfo.GetDrives())
+        {
+            try
+            {
+                if (drive.DriveType != DriveType.Fixed || !drive.IsReady
+                    || drive.TotalSize <= 0 || drive.Name.Length < 2 || drive.Name[1] != ':')
+                    continue;
+                string letter = char.ToLowerInvariant(drive.Name[0]).ToString();
+                string label = char.ToUpperInvariant(drive.Name[0]) + ":";
+                double total = drive.TotalSize / 1073741824.0;
+                double free = drive.AvailableFreeSpace / 1073741824.0;
+                result.Add(new("disk_" + letter + "_free", "Свободно на диске " + label,
+                    "sensor", Math.Round(free, 2), "mdi:harddisk", "GiB", "data_size", "measurement"));
+                result.Add(new("disk_" + letter + "_used_percent", "Заполнен диск " + label,
+                    "sensor", Math.Round(100 * (1 - free / total), 1),
+                    "mdi:harddisk", "%", null, "measurement"));
+                result.Add(new("disk_" + letter + "_total", "Объём диска " + label,
+                    "sensor", Math.Round(total, 2), "mdi:harddisk", "GiB",
+                    "data_size", "measurement"));
+            }
+            catch (IOException) { /* Диск извлечён между опросами. */ }
+            catch (UnauthorizedAccessException) { /* Нет доступа к тому. */ }
+        }
+
+        try { NetworkMetrics.Sample(result, vpnTestHost); }
+        catch (NetworkInformationException) { /* Интерфейс изменился во время опроса. */ }
+        result.AddRange(_hardware.Sample());
+
         var power = SystemInformation.PowerStatus;
+        if (power.PowerLineStatus != PowerLineStatus.Unknown)
+            result.Add(new("mains_power", "Питание от сети", "binary_sensor",
+                power.PowerLineStatus == PowerLineStatus.Online, "mdi:power-plug"));
         if (!power.BatteryChargeStatus.HasFlag(BatteryChargeStatus.NoSystemBattery)
             && power.BatteryLifePercent is >= 0 and <= 1)
         {
@@ -112,6 +151,8 @@ internal sealed class Metrics
 
         return result;
     }
+
+    public void Dispose() => _hardware.Dispose();
 
     [StructLayout(LayoutKind.Sequential)]
     private struct FileTime
