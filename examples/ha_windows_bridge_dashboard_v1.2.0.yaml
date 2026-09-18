@@ -39,6 +39,27 @@ cards:
       - entity: sensor.kompiuter_windows_asustek78_poslednii_handshake_wireguard
         name: Последний handshake
 
+  - type: markdown
+    title: "SMART накопителей"
+    content: |
+      {% set found = namespace(value=false) %}
+      {% for entity in states.sensor %}
+        {% set label = entity.name | lower %}
+        {% if 'ресурс ssd' in label or 'сектора' in label %}
+          {% set found.value = true %}
+          - {{ entity.name }}: **{{ entity.state }}{{ ' ' ~ entity.attributes.unit_of_measurement
+            if entity.attributes.unit_of_measurement is defined else '' }}**
+        {% endif %}
+      {% endfor %}
+      {% for entity in states.binary_sensor %}
+        {% if 'проблемы диска' in entity.name | lower %}
+          {% set found.value = true %}
+          - {{ entity.name }}: **{{ 'Есть' if entity.state == 'on' else 'Нет'
+            if entity.state == 'off' else 'Неизвестно' }}**
+        {% endif %}
+      {% endfor %}
+      {% if not found.value %}SMART-датчики появятся, если накопитель отдаёт эти данные.{% endif %}
+
   - type: grid
     columns: 2
     square: false

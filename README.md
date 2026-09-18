@@ -5,7 +5,7 @@
 ## Установка
 
 1. Откройте [сборки для Windows](https://github.com/asustek1978/HA-Windows-Bridge/actions/workflows/windows-build.yml) и выберите последнюю успешную сборку ветки feature/windows-client-v1.
-2. Скачайте артефакт HAWindowsBridge_v1.2.0_win-x64 и распакуйте архив полностью. В PowerShell запустите `./Install-HAWindowsBridge_v1.2.0.ps1 -StartAfterInstall` из распакованной папки. Установщик сверит SHA256, положит EXE в `%LOCALAPPDATA%\Programs\HAWindowsBridge` и создаст ярлык в меню «Пуск». Если клиент уже запущен, сначала выберите «Выход» в трее. При обновлении настройки и ключи сохраняются.
+2. Скачайте артефакт HAWindowsBridge_v1.2.0_win-x64 и распакуйте архив полностью. Откройте PowerShell в распакованной папке и выполните `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Install-HAWindowsBridge_v1.2.0.ps1 -StartAfterInstall`. Установщик сверит SHA256, положит EXE в `%LOCALAPPDATA%\Programs\HAWindowsBridge` и создаст ярлык в меню «Пуск». Если клиент уже запущен, сначала выберите «Выход» в трее. При обновлении настройки и ключи сохраняются.
 3. Откройте «Настройки...» через значок программы в трее. Он же используется для EXE и окна настроек.
 4. Укажите хотя бы один адрес Home Assistant и долгосрочный токен доступа из профиля HA → «Безопасность».
 5. Нажмите «Сохранить и подключить».

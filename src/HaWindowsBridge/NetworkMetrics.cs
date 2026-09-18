@@ -31,6 +31,8 @@ internal static class NetworkMetrics
             .ToArray();
 
         var gateway = adapters.Where(a => a.OperationalStatus == OperationalStatus.Up)
+            .OrderByDescending(a => a.NetworkInterfaceType is
+                NetworkInterfaceType.Wireless80211 or NetworkInterfaceType.Ethernet)
             .SelectMany(a => a.GetIPProperties().GatewayAddresses)
             .Select(g => g.Address)
             .FirstOrDefault(ip => ip.AddressFamily == AddressFamily.InterNetwork
