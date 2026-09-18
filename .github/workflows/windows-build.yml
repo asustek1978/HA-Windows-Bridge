@@ -1,0 +1,36 @@
+name: Сборка Windows
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Проверить защиту команд
+        run: dotnet run --project tests/BridgeSecurityChecks/BridgeSecurityChecks.csproj -c Release
+      - name: Собрать автономный EXE
+        run: dotnet publish src/HaWindowsBridge/HaWindowsBridge.csproj -c Release -r win-x64 --self-contained true -o dist
+      - name: Подготовить установочный комплект
+        shell: pwsh
+        run: |
+          Copy-Item scripts/Install-HAWindowsBridge_v1.2.0.ps1 dist/
+          Copy-Item README.md dist/
+          (Get-FileHash dist/HAWindowsBridge.exe -Algorithm SHA256).Hash + '  HAWindowsBridge.exe' | Set-Content dist/SHA256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HAWindowsBridge_v1.2.0_win-x64
+          path: |
+            dist/HAWindowsBridge.exe
+            dist/Install-HAWindowsBridge_v1.2.0.ps1
+            dist/SHA256.txt
+            dist/README.md
+          if-no-files-found: error

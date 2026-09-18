@@ -1,0 +1,197 @@
+# Версия 1.2.0. Замените старый файл пакета версии 1.1.0 этим файлом.
+# Если entity_id датчика «Последний отчёт» отличается, задайте его в помощнике
+# input_text.ha_windows_bridge_last_seen_entity через интерфейс HA.
+# В /config/secrets.yaml укажите ha_windows_bridge_control_key из окна клиента Windows.
+ha_windows_bridge:
+  input_boolean:
+    ha_windows_bridge_expected_offline:
+      name: "Windows — выключение запланировано"
+      icon: mdi:power-sleep
+
+  input_text:
+    ha_windows_bridge_last_seen_entity:
+      name: "Windows — entity_id последнего отчёта"
+      icon: mdi:clock-check-outline
+      max: 160
+
+  input_number:
+    ha_windows_bridge_interval:
+      name: "Windows — интервал отчётов"
+      icon: mdi:timer-outline
+      min: 15
+      max: 300
+      step: 1
+      mode: box
+
+  template:
+    - binary_sensor:
+        - name: "Компьютер Windows ASUSTEK78 в сети"
+          unique_id: ha_windows_bridge_asustek78_online
+          icon: mdi:desktop-classic
+          state: >-
+            {% set selected = states('input_text.ha_windows_bridge_last_seen_entity') %}
+            {% set entity = selected if selected.startswith('sensor.') else
+              'sensor.kompiuter_windows_asustek78_poslednii_otchet' %}
+            {% set last = as_timestamp(states(entity), 0) %}
+            {% set configured = states('input_number.ha_windows_bridge_interval') | int(30) %}
+            {% set interval = configured if configured >= 30 else 30 %}
+            {{ last > 0 and 0 <= as_timestamp(now()) - last < interval * 3 + 30 }}
+
+  automation:
+    - id: ha_windows_bridge_asustek78_offline_v120
+      alias: "Windows ASUSTEK78 — нет связи с мостом"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: binary_sensor.kompiuter_windows_asustek78_v_seti
+          to: "off"
+          for: "00:02:00"
+      conditions:
+        - condition: state
+          entity_id: input_boolean.ha_windows_bridge_expected_offline
+          state: "off"
+        - condition: template
+          value_template: >-
+            {% set selected = states('input_text.ha_windows_bridge_last_seen_entity') %}
+            {% set entity = selected if selected.startswith('sensor.') else
+              'sensor.kompiuter_windows_asustek78_poslednii_otchet' %}
+            {{ as_timestamp(states(entity), 0) > 0 }}
+      actions:
+        - action: persistent_notification.create
+          data:
+            notification_id: ha_windows_bridge_asustek78_offline
+            title: "Компьютер Windows ASUSTEK78 не отвечает"
+            message: >-
+              Данные моста Windows перестали обновляться. Проверьте питание ПК,
+              домашнюю сеть и подключение Home Assistant.
+        - action: slava_max.send_message
+          data:
+            message: >-
+              🖥️ Компьютер Windows ASUSTEK78 не отвечает. Данные моста
+              перестали обновляться: проверьте питание ПК и домашнюю сеть.
+            notify: true
+    - id: ha_windows_bridge_asustek78_disk_warning_v120
+      alias: "Windows ASUSTEK78 — проблемы SMART"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: binary_sensor.kompiuter_windows_asustek78_problemy_smart_nakopitelei
+          to: "on"
+          for: "00:01:00"
+      actions:
+        - action: slava_max.send_emergency
+          data:
+            message: >-
+              🚨 На компьютере ASUSTEK78 появились признаки проблем с накопителем:
+              ошибки SMART или ресурс SSD ниже 15%. Проверьте отдельные датчики
+              диска и состояние резервных копий.
+            notify: true
+    - id: ha_windows_bridge_asustek78_online_v120
+      alias: "Windows ASUSTEK78 — связь восстановлена"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: binary_sensor.kompiuter_windows_asustek78_v_seti
+          to: "on"
+      actions:
+        - action: persistent_notification.dismiss
+          data:
+            notification_id: ha_windows_bridge_asustek78_offline
+        - action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.ha_windows_bridge_expected_offline
+    - id: ha_windows_bridge_asustek78_expected_timeout_v120
+      alias: "Windows ASUSTEK78 — отмена ожидания выключения"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: input_boolean.ha_windows_bridge_expected_offline
+          to: "on"
+          for: "00:03:00"
+      conditions:
+        - condition: state
+          entity_id: binary_sensor.kompiuter_windows_asustek78_v_seti
+          state: "on"
+      actions:
+        - action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.ha_windows_bridge_expected_offline
+
+  script:
+    ha_windows_bridge_lock:
+      alias: "Заблокировать Windows"
+      icon: mdi:lock
+      mode: single
+      sequence:
+        - action: notify.mobile_app_kompiuter_windows_asustek78
+          data:
+            message: HA_WINDOWS_BRIDGE_COMMAND
+            data:
+              ha_windows_bridge:
+                action: lock
+                key: !secret ha_windows_bridge_control_key
+                issued_at: "{{ as_timestamp(now()) | int }}"
+    ha_windows_bridge_sleep:
+      alias: "Отправить Windows в сон"
+      icon: mdi:sleep
+      mode: single
+      sequence:
+        - action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.ha_windows_bridge_expected_offline
+        - action: notify.mobile_app_kompiuter_windows_asustek78
+          data:
+            message: HA_WINDOWS_BRIDGE_COMMAND
+            data:
+              ha_windows_bridge:
+                action: sleep
+                key: !secret ha_windows_bridge_control_key
+                issued_at: "{{ as_timestamp(now()) | int }}"
+    ha_windows_bridge_restart:
+      alias: "Перезагрузить Windows через 60 секунд"
+      icon: mdi:restart
+      mode: single
+      sequence:
+        - action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.ha_windows_bridge_expected_offline
+        - action: notify.mobile_app_kompiuter_windows_asustek78
+          data:
+            message: HA_WINDOWS_BRIDGE_COMMAND
+            data:
+              ha_windows_bridge:
+                action: restart
+                key: !secret ha_windows_bridge_control_key
+                issued_at: "{{ as_timestamp(now()) | int }}"
+    ha_windows_bridge_shutdown:
+      alias: "Выключить Windows через 60 секунд"
+      icon: mdi:power
+      mode: single
+      sequence:
+        - action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.ha_windows_bridge_expected_offline
+        - action: notify.mobile_app_kompiuter_windows_asustek78
+          data:
+            message: HA_WINDOWS_BRIDGE_COMMAND
+            data:
+              ha_windows_bridge:
+                action: shutdown
+                key: !secret ha_windows_bridge_control_key
+                issued_at: "{{ as_timestamp(now()) | int }}"
+    ha_windows_bridge_cancel_shutdown:
+      alias: "Отменить выключение Windows"
+      icon: mdi:cancel
+      mode: single
+      sequence:
+        - action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.ha_windows_bridge_expected_offline
+        - action: notify.mobile_app_kompiuter_windows_asustek78
+          data:
+            message: HA_WINDOWS_BRIDGE_COMMAND
+            data:
+              ha_windows_bridge:
+                action: cancel_shutdown
+                key: !secret ha_windows_bridge_control_key
+                issued_at: "{{ as_timestamp(now()) | int }}"
