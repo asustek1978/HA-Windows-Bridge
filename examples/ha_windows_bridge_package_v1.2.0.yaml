@@ -64,6 +64,28 @@ ha_windows_bridge:
             message: >-
               Данные моста Windows перестали обновляться. Проверьте питание ПК,
               домашнюю сеть и подключение Home Assistant.
+        - action: slava_max.send_message
+          data:
+            message: >-
+              🖥️ Компьютер Windows ASUSTEK78 не отвечает. Данные моста
+              перестали обновляться: проверьте питание ПК и домашнюю сеть.
+            notify: true
+    - id: ha_windows_bridge_asustek78_disk_warning_v120
+      alias: "Windows ASUSTEK78 — проблемы SMART"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: binary_sensor.kompiuter_windows_asustek78_problemy_smart_nakopitelei
+          to: "on"
+          for: "00:01:00"
+      actions:
+        - action: slava_max.send_emergency
+          data:
+            message: >-
+              🚨 На компьютере ASUSTEK78 появились признаки проблем с накопителем:
+              ошибки SMART или ресурс SSD ниже 15%. Проверьте отдельные датчики
+              диска и состояние резервных копий.
+            notify: true
     - id: ha_windows_bridge_asustek78_online_v120
       alias: "Windows ASUSTEK78 — связь восстановлена"
       mode: single

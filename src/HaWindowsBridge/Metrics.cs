@@ -130,7 +130,17 @@ internal sealed class Metrics : IDisposable
 
         try { NetworkMetrics.Sample(result, vpnTestHost); }
         catch (NetworkInformationException) { /* Интерфейс изменился во время опроса. */ }
-        result.AddRange(_hardware.Sample());
+        var hardware = _hardware.Sample();
+        result.AddRange(hardware);
+        var diskWarnings = hardware.Where(m => m.Id.StartsWith("storage_", StringComparison.Ordinal)
+            && m.Id.EndsWith("_warning", StringComparison.Ordinal)).ToArray();
+        if (diskWarnings.Length > 0)
+        {
+            object state = diskWarnings.Any(m => m.State is true) ? true
+                : diskWarnings.Any(m => m.State is string) ? "unknown" : false;
+            result.Add(new("disk_health_warning", "Проблемы SMART накопителей",
+                "binary_sensor", state, "mdi:harddisk-alert", Category: "diagnostic"));
+        }
 
         var power = SystemInformation.PowerStatus;
         if (power.PowerLineStatus != PowerLineStatus.Unknown)

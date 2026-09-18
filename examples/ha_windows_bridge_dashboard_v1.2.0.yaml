@@ -20,6 +20,8 @@ cards:
         name: Память
       - entity: sensor.kompiuter_windows_asustek78_zapolnen_disk_c
         name: "Диск C:"
+      - entity: binary_sensor.kompiuter_windows_asustek78_problemy_smart_nakopitelei
+        name: Проблемы SMART
 
   - type: entities
     title: "Сеть и VPN"
