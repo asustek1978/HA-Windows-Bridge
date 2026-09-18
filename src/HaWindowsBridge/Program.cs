@@ -23,6 +23,7 @@ internal static class Program
         }
         catch (Exception ex)
         {
+            BridgeLog.Write("Запуск", ex);
             MessageBox.Show(ex.Message, "Не удалось запустить мост Windows",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
@@ -69,6 +70,8 @@ internal sealed class BridgeContext : ApplicationContext
         menu.Items.Add(_statusItem);
         menu.Items.Add("Настройки...", null, (_, _) => OpenSettings());
         menu.Items.Add("Открыть Home Assistant", null, (_, _) => OpenHomeAssistant());
+        menu.Items.Add("Проверить обновления...", null, async (_, _) => await CheckUpdatesAsync());
+        menu.Items.Add("Открыть журнал", null, (_, _) => OpenLog());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Выход", null, (_, _) => Quit());
 
@@ -101,9 +104,18 @@ internal sealed class BridgeContext : ApplicationContext
                 }
                 else
                 {
-                    var (url, network) = await _client.FindServerAsync(_stop.Token);
+                    var (url, network, latency) = await _client.FindServerAsync(_stop.Token);
                     await _client.EnsureRegistrationAsync(url, _stop.Token);
                     var readings = _metrics.Sample(_config.VpnTestHost);
+                    readings.Add(new("ha_connection", "Подключение к Home Assistant", "sensor",
+                        network, "mdi:home-assistant", Category: "diagnostic"));
+                    readings.Add(new("ha_latency", "Home Assistant — задержка", "sensor",
+                        latency, "mdi:timer-outline", "ms", null, "measurement", "diagnostic"));
+                    readings.Add(new("bridge_version", "Версия моста Windows", "sensor",
+                        AppInfo.Version, "mdi:information-outline", Category: "diagnostic"));
+                    readings.Add(new("report_interval", "Интервал отчётов", "sensor",
+                        Math.Clamp(_config.IntervalSeconds, 15, 300), "mdi:timer-outline",
+                        "s", "duration", "measurement", "diagnostic"));
                     readings.Add(new("remote_control", "Управление Windows из HA", "binary_sensor",
                         _config.AllowRemoteControl, "mdi:remote"));
                     if (_metrics.LastCommand.Length > 0)
@@ -117,6 +129,7 @@ internal sealed class BridgeContext : ApplicationContext
             catch (OperationCanceledException) when (_stop.IsCancellationRequested) { break; }
             catch (Exception ex)
             {
+                BridgeLog.Write("Отчёт Home Assistant", ex);
                 StopNotifications();
                 SetStatus("Нет связи: " + ex.Message);
             }
@@ -145,7 +158,11 @@ internal sealed class BridgeContext : ApplicationContext
                     ExecuteRemoteCommand, cancellation);
             }
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
-            catch (Exception ex) { SetStatus("Нет связи с уведомлениями: " + ex.Message); }
+            catch (Exception ex)
+            {
+                BridgeLog.Write("Канал уведомлений", ex);
+                SetStatus("Нет связи с уведомлениями: " + ex.Message);
+            }
             finally { _pushConnected = false; }
         }, cancellation);
     }
@@ -219,6 +236,40 @@ internal sealed class BridgeContext : ApplicationContext
         Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
     }
 
+    private async Task CheckUpdatesAsync()
+    {
+        try
+        {
+            var (message, url) = await UpdateChecker.CheckAsync();
+            if (_stopping) return;
+            var answer = MessageBox.Show(message, "Обновление HA Windows Bridge",
+                url is null ? MessageBoxButtons.OK : MessageBoxButtons.YesNo,
+                MessageBoxIcon.Information);
+            if (url is not null && answer == DialogResult.Yes)
+                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            BridgeLog.Write("Проверка обновлений", ex);
+            MessageBox.Show("Не удалось проверить релизы GitHub. Подробности в журнале.",
+                "Обновление HA Windows Bridge", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private static void OpenLog()
+    {
+        try
+        {
+            if (!File.Exists(BridgeLog.FilePath))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(BridgeLog.FilePath)!);
+                File.WriteAllText(BridgeLog.FilePath, "Ошибок пока нет." + Environment.NewLine);
+            }
+            Process.Start(new ProcessStartInfo(BridgeLog.FilePath) { UseShellExecute = true });
+        }
+        catch (Exception ex) { BridgeLog.Write("Открытие журнала", ex); }
+    }
+
     private void Quit()
     {
         if (_stopping) return;
@@ -265,8 +316,8 @@ internal sealed class SettingsForm : Form
         Text = "Мост Windows для Home Assistant — настройки";
         Icon = BridgeIcon.Value;
         StartPosition = FormStartPosition.CenterScreen;
-        MinimumSize = new Size(560, 430);
-        Size = new Size(660, 470);
+        MinimumSize = new Size(560, 460);
+        Size = new Size(660, 510);
 
         _local.Text = config.LocalUrl;
         _external.Text = config.ExternalUrl;
@@ -289,13 +340,13 @@ internal sealed class SettingsForm : Form
 
         var grid = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 10,
+            Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 11,
             Padding = new Padding(14), AutoSize = false
         };
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (int i = 0; i < 10; i++)
-            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, i == 9 ? 50 : 37));
+        for (int i = 0; i < 11; i++)
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, i == 10 ? 50 : 37));
 
         AddRow(grid, 0, "Локальный адрес HA", _local);
         AddRow(grid, 1, "Внешний адрес HA", _external);
@@ -311,9 +362,14 @@ internal sealed class SettingsForm : Form
         keyRow.Controls.Add(_copyKey, 1, 0);
         AddRow(grid, 7, "Ключ команд HA", keyRow);
         grid.Controls.Add(_status, 1, 8);
+        AddRow(grid, 9, "Версия клиента", new Label
+        {
+            Text = AppInfo.Version, Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft
+        });
         var save = new Button { Text = "Сохранить и подключить", Width = 195, Height = 32 };
         save.Click += (_, _) => SaveSettings();
-        grid.Controls.Add(save, 1, 9);
+        grid.Controls.Add(save, 1, 10);
         Controls.Add(grid);
         AcceptButton = save;
     }

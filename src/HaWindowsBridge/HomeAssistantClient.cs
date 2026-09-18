@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -14,7 +15,7 @@ internal sealed class HomeAssistantClient : IDisposable
 
     public HomeAssistantClient(BridgeConfig config) => _config = config;
 
-    public async Task<(string Url, string Network)> FindServerAsync(CancellationToken ct)
+    public async Task<(string Url, string Network, long Latency)> FindServerAsync(CancellationToken ct)
     {
         Exception? last = null;
         foreach (var (url, network) in new[]
@@ -23,10 +24,11 @@ internal sealed class HomeAssistantClient : IDisposable
             if (string.IsNullOrEmpty(url)) continue;
             try
             {
+                var timer = Stopwatch.StartNew();
                 using var request = Authenticated(HttpMethod.Get, url + "/api/");
                 using var response = await _http.SendAsync(request, ct);
                 response.EnsureSuccessStatusCode();
-                return (url, network);
+                return (url, network, timer.ElapsedMilliseconds);
             }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
             {
@@ -49,7 +51,7 @@ internal sealed class HomeAssistantClient : IDisposable
     {
         if (!string.IsNullOrEmpty(_config.WebhookId))
         {
-            if (_config.UiLocale != "ru" || _config.AppVersion != "1.1.0")
+            if (_config.UiLocale != "ru" || _config.AppVersion != AppInfo.Version)
             {
                 bool relocalize = _config.UiLocale != "ru";
                 using var update = await PostWebhookAsync(url, new
@@ -57,7 +59,7 @@ internal sealed class HomeAssistantClient : IDisposable
                     type = "update_registration",
                     data = new
                     {
-                        app_version = "1.1.0",
+                        app_version = AppInfo.Version,
                         device_name = "Компьютер Windows " + Environment.MachineName,
                         manufacturer = "Компьютер Windows",
                         model = Environment.MachineName,
@@ -67,7 +69,7 @@ internal sealed class HomeAssistantClient : IDisposable
                 }, ct);
                 if (relocalize) _config.RegisteredSensors.Clear();
                 _config.UiLocale = "ru";
-                _config.AppVersion = "1.1.0";
+                _config.AppVersion = AppInfo.Version;
                 _config.Save();
             }
             return;
@@ -79,7 +81,7 @@ internal sealed class HomeAssistantClient : IDisposable
                 device_id = _config.DeviceId,
                 app_id = "ha.windows.bridge",
                 app_name = "Мост Windows для Home Assistant",
-                app_version = "1.1.0",
+                app_version = AppInfo.Version,
                 device_name = "Компьютер Windows " + Environment.MachineName,
                 manufacturer = "Компьютер Windows",
                 model = Environment.MachineName,
@@ -118,6 +120,7 @@ internal sealed class HomeAssistantClient : IDisposable
             if (metric.Unit is not null) data["unit_of_measurement"] = metric.Unit;
             if (metric.DeviceClass is not null) data["device_class"] = metric.DeviceClass;
             if (metric.StateClass is not null) data["state_class"] = metric.StateClass;
+            if (metric.Category is not null) data["entity_category"] = metric.Category;
             await PostWebhookAsync(url, new { type = "register_sensor", data }, ct);
             _config.RegisteredSensors.Add(metric.Id);
             _config.Save();

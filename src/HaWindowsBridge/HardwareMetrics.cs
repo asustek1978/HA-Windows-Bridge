@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using LibreHardwareMonitor.Hardware;
+using LibreHardwareMonitor.Hardware.Storage;
 
 namespace HAWindowsBridge;
 
@@ -104,6 +105,7 @@ internal sealed class HardwareMetrics : IDisposable
                         "storage_" + id + "_temperature", hardware.Name + " — температура диска",
                         "mdi:harddisk", "°C", "temperature", n =>
                             n.Contains("temperature") || n.Contains("drive") ? 10 : 0, -20, 130);
+                    AddStorageHealth(result, hardware, "storage_" + id, hardware.Name);
                     break;
             }
             foreach (var child in hardware.SubHardware)
@@ -147,6 +149,50 @@ internal sealed class HardwareMetrics : IDisposable
         double gib = sensor.Value!.Value / (sensor.SensorType == SensorType.SmallData ? 1024 : 1);
         result.Add(new Metric(id, name, "sensor", Math.Round(gib, 2),
             "mdi:memory", "GiB", "data_size", "measurement"));
+    }
+
+    private static void AddStorageHealth(List<Metric> result, IHardware hardware,
+        string id, string name)
+    {
+        var life = hardware.Sensors.FirstOrDefault(s => s.SensorType == SensorType.Level
+            && s.Name.Equals("Life", StringComparison.OrdinalIgnoreCase)
+            && s.Value is float value && float.IsFinite(value) && value is >= 0 and <= 100);
+        if (life is not null)
+            result.Add(new(id + "_life", name + " — ресурс SSD", "sensor",
+                Math.Round(life.Value!.Value, 1), "mdi:harddisk", "%", null,
+                "measurement", "diagnostic"));
+
+        var hours = hardware.Sensors.FirstOrDefault(s => s.SensorType == SensorType.Factor
+            && s.Name.Equals("Power On Hours", StringComparison.OrdinalIgnoreCase)
+            && s.Value is float value && float.IsFinite(value) && value is >= 0 and < 1000000);
+        if (hours is not null)
+            result.Add(new(id + "_power_on_hours", name + " — наработка", "sensor",
+                Math.Round(hours.Value!.Value), "mdi:clock-outline", "h", "duration",
+                "measurement", "diagnostic"));
+
+        if (hardware is not ISmart smart) return;
+        var errors = new[]
+        {
+            ("reallocated", "переназначенные сектора", "Reallocated"),
+            ("pending", "ожидающие сектора", "Current Pending Sector"),
+            ("uncorrectable", "неисправимые сектора", "Uncorrectable")
+        };
+        bool warning = life is not null && life.Value!.Value < 15;
+        bool hasHealth = life is not null;
+        foreach (var (suffix, label, attributeName) in errors)
+        {
+            var attribute = smart.Attributes.FirstOrDefault(a => a.Name.Contains(attributeName,
+                StringComparison.OrdinalIgnoreCase) && float.IsFinite(a.Value) && a.Value >= 0);
+            if (attribute is null) continue;
+            hasHealth = true;
+            warning |= attribute.Value > 0;
+            result.Add(new(id + "_" + suffix, name + " — " + label, "sensor",
+                Math.Round(attribute.Value), "mdi:harddisk-alert", null, null,
+                "measurement", "diagnostic"));
+        }
+        if (hasHealth)
+            result.Add(new(id + "_warning", name + " — проблемы диска", "binary_sensor",
+                warning, "mdi:harddisk-alert", Category: "diagnostic"));
     }
 
     public void Dispose()

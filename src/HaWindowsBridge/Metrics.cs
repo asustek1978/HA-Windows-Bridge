@@ -6,7 +6,8 @@ using System.Runtime.InteropServices;
 namespace HAWindowsBridge;
 
 internal sealed record Metric(string Id, string Name, string Type, object State,
-    string Icon, string? Unit = null, string? DeviceClass = null, string? StateClass = null);
+    string Icon, string? Unit = null, string? DeviceClass = null, string? StateClass = null,
+    string? Category = null);
 
 internal sealed class Metrics : IDisposable
 {
@@ -62,7 +63,8 @@ internal sealed class Metrics : IDisposable
             Environment.TickCount64 / 60000L, "mdi:clock-outline",
             "min", "duration", "measurement"));
         result.Add(new("last_seen", "Последний отчёт", "sensor",
-            DateTimeOffset.UtcNow.ToString("O"), "mdi:clock-check-outline", null, "timestamp"));
+            DateTimeOffset.UtcNow.ToString("O"), "mdi:clock-check-outline", null, "timestamp",
+            null, "diagnostic"));
 
         try
         {

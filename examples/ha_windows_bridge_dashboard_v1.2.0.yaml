@@ -1,0 +1,91 @@
+# Вставьте как отдельную карточку через «Показать редактор кода».
+# Проверьте entity_id на странице устройства: HA может изменить транслитерацию.
+# Показатели SMART имеют индивидуальный суффикс диска, их можно добавить вручную.
+type: vertical-stack
+cards:
+  - type: entities
+    title: "Компьютер Windows ASUSTEK78"
+    show_header_toggle: false
+    state_color: true
+    entities:
+      - entity: binary_sensor.kompiuter_windows_asustek78_v_seti
+        name: В сети
+      - entity: sensor.kompiuter_windows_asustek78_poslednii_otchet
+        name: Последний отчёт
+      - entity: sensor.kompiuter_windows_asustek78_versiia_mosta_windows
+        name: Версия клиента
+      - entity: sensor.kompiuter_windows_asustek78_zagruzka_protsessora
+        name: Процессор
+      - entity: sensor.kompiuter_windows_asustek78_zagruzka_pamiati
+        name: Память
+      - entity: sensor.kompiuter_windows_asustek78_zapolnen_disk_c
+        name: "Диск C:"
+
+  - type: entities
+    title: "Сеть и VPN"
+    show_header_toggle: false
+    state_color: true
+    entities:
+      - entity: sensor.kompiuter_windows_asustek78_podkliuchenie_k_home_assistant
+        name: Канал HA
+      - entity: sensor.kompiuter_windows_asustek78_home_assistant_zaderzhka
+        name: HA, мс
+      - entity: binary_sensor.kompiuter_windows_asustek78_router_otvechaet
+        name: Роутер
+      - entity: sensor.kompiuter_windows_asustek78_router_zaderzhka
+        name: Роутер, мс
+      - entity: binary_sensor.kompiuter_windows_asustek78_vpn_uzel_otvechaet
+        name: VPN-узел
+      - entity: sensor.kompiuter_windows_asustek78_poslednii_handshake_wireguard
+        name: Последний handshake
+
+  - type: grid
+    columns: 2
+    square: false
+    cards:
+      - type: button
+        name: Заблокировать
+        icon: mdi:lock
+        tap_action:
+          action: perform-action
+          perform_action: script.turn_on
+          target:
+            entity_id: script.ha_windows_bridge_lock
+      - type: button
+        name: Сон
+        icon: mdi:sleep
+        tap_action:
+          action: perform-action
+          perform_action: script.turn_on
+          target:
+            entity_id: script.ha_windows_bridge_sleep
+          confirmation:
+            text: Отправить компьютер в сон?
+      - type: button
+        name: Перезагрузка
+        icon: mdi:restart
+        tap_action:
+          action: perform-action
+          perform_action: script.turn_on
+          target:
+            entity_id: script.ha_windows_bridge_restart
+          confirmation:
+            text: Перезагрузить компьютер через 60 секунд?
+      - type: button
+        name: Выключить
+        icon: mdi:power
+        tap_action:
+          action: perform-action
+          perform_action: script.turn_on
+          target:
+            entity_id: script.ha_windows_bridge_shutdown
+          confirmation:
+            text: Выключить компьютер через 60 секунд?
+      - type: button
+        name: Отменить выключение
+        icon: mdi:cancel
+        tap_action:
+          action: perform-action
+          perform_action: script.turn_on
+          target:
+            entity_id: script.ha_windows_bridge_cancel_shutdown

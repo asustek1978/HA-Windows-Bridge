@@ -5,6 +5,11 @@ using System.Text.Json;
 
 namespace HAWindowsBridge;
 
+internal static class AppInfo
+{
+    public const string Version = "1.2.0";
+}
+
 internal sealed class BridgeConfig
 {
     private static readonly object SaveLock = new();
@@ -68,7 +73,7 @@ internal sealed class BridgeConfig
     {
         WebhookCipher = Protect(webhook);
         UiLocale = "ru";
-        AppVersion = "1.1.0";
+        AppVersion = AppInfo.Version;
         RegisteredSensors.Clear();
         Save();
     }
