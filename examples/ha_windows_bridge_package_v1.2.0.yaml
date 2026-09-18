@@ -100,6 +100,22 @@ ha_windows_bridge:
         - action: input_boolean.turn_off
           target:
             entity_id: input_boolean.ha_windows_bridge_expected_offline
+    - id: ha_windows_bridge_asustek78_expected_timeout_v120
+      alias: "Windows ASUSTEK78 — отмена ожидания выключения"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: input_boolean.ha_windows_bridge_expected_offline
+          to: "on"
+          for: "00:03:00"
+      conditions:
+        - condition: state
+          entity_id: binary_sensor.kompiuter_windows_asustek78_v_seti
+          state: "on"
+      actions:
+        - action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.ha_windows_bridge_expected_offline
 
   script:
     ha_windows_bridge_lock:
