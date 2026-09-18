@@ -1,4 +1,4 @@
-# Скопируйте файл в /config/includes/packages/ и замените действие notify ниже.
+# Скопируйте файл в /config/includes/packages/ для компьютера ASUSTEK78.
 # В /config/secrets.yaml укажите ha_windows_bridge_control_key из окна клиента Windows.
 ha_windows_bridge:
   script:
